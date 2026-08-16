@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>2D Rocket League Co-op & Bot Pro</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background: #0d1117;
+      color: #f0f6fc;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 1000px;
+      margin-bottom: 15px;
+      background: #161b22;
+      padding: 12px 24px;
+      border-radius: 12px;
+      border: 1px solid #30363d;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+    .score-card {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      font-size: 1.5rem;
+      font-weight: 800;
+      letter-spacing: 1px;
+    }
+    .badge {
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .p1-color { color: #38bdf8; }
+    .p1-bg { background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); }
+    .p2-color { color: #f43f5e; }
+    .p2-bg { background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.4); }
+    
+    .mode-selector {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      background: #0d1117;
+      padding: 4px 8px;
+      border-radius: 8px;
+      border: 1px solid #30363d;
+    }
+    select {
+      background: #21262d;
+      color: #f0f6fc;
+      border: 1px solid #30363d;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      outline: none;
+    }
+
+    .canvas-container {
+      position: relative;
+      width: 1000px;
+      height: 600px;
+    }
+
+    canvas {
+      border-radius: 12px;
+      border: 2px solid #30363d;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.7);
+      background: #092e1b;
+    }
+
+    .overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1000px;
+      height: 600px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      border-radius: 12px;
+    }
+
+    #countdown-text {
+      font-size: 6rem;
+      font-weight: 900;
+      color: #fbbf24;
+      text-shadow: 0 0 20px rgba(251, 191, 36, 0.6), 0 4px 10px rgba(0,0,0,0.8);
+      transition: transform 0.1s ease-out;
+    }
+
+    #replay-banner {
+      display: none;
+      position: absolute;
+      top: 25px;
+      left: 25px;
+      background: rgba(225, 29, 72, 0.85);
+      color: #fff;
+      padding: 6px 16px;
+      border-radius: 6px;
+      font-weight: 900;
+      font-size: 1.1rem;
+      letter-spacing: 2px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      animation: pulse 1s infinite alternate;
+    }
+
+    @keyframes pulse {
+      from { opacity: 0.7; }
+      to { opacity: 1; }
+    }
+
+    .controls-panel {
+      margin-top: 15px;
+      display: flex;
+      gap: 30px;
+      background: #161b22;
+      padding: 10px 24px;
+      border-radius: 10px;
+      border: 1px solid #30363d;
+      font-size: 0.85rem;
+    }
+    .key {
+      background: #21262d;
+      border: 1px solid #30363d;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #c9d1d9;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="score-card p1-color">
+      <span class="badge p1-bg">Jugador 1</span>
+      <span id="s1" style="font-size: 2.2rem">0</span>
+    </div>
+    
+    <div class="mode-selector">
+      <label for="mode" style="font-size:0.85rem; font-weight:700; color:#8b949e;">RIVAL:</label>
+      <select id="mode">
+        <option value="pvp">2 Jugadores (Local)</option>
+        <option value="easy">Bot: Fácil</option>
+        <option value="normal" selected>Bot: Normal</option>
+        <option value="hard">Bot: Difícil</option>
+      </select>
+    </div>
+
+    <div class="score-card p2-color">
+      <span id="s2" style="font-size: 2.2rem">0</span>
+      <span class="badge p2-bg" id="p2-label">Jugador 2</span>
+    </div>
+  </div>
+
+  <div class="canvas-container">
+    <canvas id="game" width="1000" height="600"></canvas>
+    <div class="overlay">
+      <div id="countdown-text">3</div>
+    </div>
+    <div id="replay-banner">REPETICIÓN</div>
+  </div>
+
+  <div class="controls-panel">
+    <div><span class="p1-color" style="font-weight:700">AZUL:</span> <span class="key">W</span> Acelera | <span class="key">S</span> Reversa | <span class="key">A</span>/<span class="key">D</span> Gira</div>
+    <div id="p2-controls"><span class="p2-color" style="font-weight:700">ROJO:</span> <span class="key">▲</span> Acelera | <span class="key">▼</span> Reversa | <span class="key">◄</span>/<span class="key">►</span> Gira</div>
+  </div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const modeSelect = document.getElementById('mode');
+const p2Label = document.getElementById('p2-label');
+const p2Controls = document.getElementById('p2-controls');
+const countdownText = document.getElementById('countdown-text');
+const replayBanner = document.getElementById('replay-banner');
+
+let score1 = 0;
+let score2 = 0;
+const keys = {};
+
+// Sistema de Estado
+let gameState = 'COUNTDOWN'; // 'COUNTDOWN', 'PLAYING', 'REPLAY'
+let countdownVal = 3;
+let countdownTimer = null;
+
+// Sistema de Repetición
+const REPLAY_FRAMES = 120; // 2 segundos registrados
+let historyBuffer = [];
+let replayIndex = 0;
+
+window.addEventListener('keydown', e => keys[e.code] = true);
+window.addEventListener('keyup', e => keys[e.code] = false);
+
+modeSelect.addEventListener('change', () => {
+  const mode = modeSelect.value;
+  p2Label.innerText = mode === 'pvp' ? 'Jugador 2' : 'BOT (' + modeSelect.options[modeSelect.selectedIndex].text.split(': ')[1] + ')';
+  p2Controls.style.opacity = mode === 'pvp' ? '1' : '0.3';
+  resetGame();
+});
+
+class Particle {
+  constructor(x, y, vx, vy, color, size, life) {
+    this.x = x;
+    this.y = y;
+    this.vx = vx;
+    this.vy = vy;
+    this.color = color;
+    this.size = size;
+    this.life = life;
+    this.maxLife = life;
+  }
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+    this.life--;
+    this.size *= 0.95;
+  }
+  draw() {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, this.life / this.maxLife);
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, Math.max(0.1, this.size), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+let particles = [];
+
+class Car {
+  constructor(x, y, color, isP2 = false) {
+    this.startX = x;
+    this.startY = y;
+    this.x = x;
+    this.y = y;
+    this.vx = 0;
+    this.vy = 0;
+    this.radius = 24;
+    this.width = 46;
+    this.height = 28;
+    this.angle = isP2 ? Math.PI : 0;
+    this.color = color;
+    this.isP2 = isP2;
+    
+    this.speed = 5.5;
+    this.reverseSpeed = 3.0;
+    this.turnSpeed = 0.085;
+  }
+
+  reset() {
+    this.x = this.startX;
+    this.y = this.startY;
+    this.vx = 0;
+    this.vy = 0;
+    this.angle = this.isP2 ? Math.PI : 0;
+  }
+
+  update() {
+    if (gameState !== 'PLAYING') return;
+
+    let moveIntent = 0;
+    const mode = modeSelect.value;
+
+    if (!this.isP2) {
+      if (keys['KeyA']) this.angle -= this.turnSpeed;
+      if (keys['KeyD']) this.angle += this.turnSpeed;
+      if (keys['KeyW']) moveIntent = 1;
+      else if (keys['KeyS']) moveIntent = -1;
+    } else {
+      if (mode === 'pvp') {
+        if (keys['ArrowLeft']) this.angle -= this.turnSpeed;
+        if (keys['ArrowRight']) this.angle += this.turnSpeed;
+        if (keys['ArrowUp']) moveIntent = 1;
+        else if (keys['ArrowDown']) moveIntent = -1;
+      } else {
+        moveIntent = this.updateBotAI(mode);
+      }
+    }
+
+    if (moveIntent === 1) {
+      this.vx = Math.cos(this.angle) * this.speed;
+      this.vy = Math.sin(this.angle) * this.speed;
+
+      if (Math.random() < 0.6) {
+        const backX = this.x - Math.cos(this.angle) * (this.width / 2);
+        const backY = this.y - Math.sin(this.angle) * (this.width / 2);
+        particles.push(new Particle(
+          backX, backY,
+          -Math.cos(this.angle) * 2 + (Math.random() - 0.5),
+          -Math.sin(this.angle) * 2 + (Math.random() - 0.5),
+          this.isP2 ? '#ff7b00' : '#00f0ff',
+          4 + Math.random() * 3,
+          15
+        ));
+      }
+    } else if (moveIntent === -1) {
+      this.vx = -Math.cos(this.angle) * this.reverseSpeed;
+      this.vy = -Math.sin(this.angle) * this.reverseSpeed;
+    } else {
+      this.vx = 0;
+      this.vy = 0;
+    }
+
+    this.x += this.vx;
+    this.y += this.vy;
+
+    const minX = 20 + this.width / 2;
+    const maxX = canvas.width - 20 - this.width / 2;
+    const minY = 20 + this.height / 2;
+    const maxY = canvas.height - 20 - this.height / 2;
+
+    if (this.x < minX) this.x = minX;
+    if (this.x > maxX) this.x = maxX;
+    if (this.y < minY) this.y = minY;
+    if (this.y > maxY) this.y = maxY;
+  }
+
+  updateBotAI(difficulty) {
+    let targetX = ball.x;
+    let targetY = ball.y;
+
+    let turnFactor = 0.06;
+    let speedMult = 0.8;
+    let offsetGoal = 40;
+
+    if (difficulty === 'easy') {
+      turnFactor = 0.04;
+      speedMult = 0.65;
+    } else if (difficulty === 'normal') {
+      turnFactor = 0.075;
+      speedMult = 0.85;
+      if (ball.x < this.x) {
+        targetX = ball.x + offsetGoal;
+      }
+    } else if (difficulty === 'hard') {
+      turnFactor = 0.095;
+      speedMult = 1.0;
+      targetX = ball.x + ball.vx * 8;
+      targetY = ball.y + ball.vy * 8;
+      if (targetX < this.x && ball.x < canvas.width * 0.7) {
+        targetX += 60;
+      }
+    }
+
+    const dx = targetX - this.x;
+    const dy = targetY - this.y;
+    let targetAngle = Math.atan2(dy, dx);
+
+    let angleDiff = targetAngle - this.angle;
+    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+
+    if (Math.abs(angleDiff) > 0.1) {
+      this.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), turnFactor);
+    }
+
+    if (Math.abs(angleDiff) < Math.PI / 2) {
+      this.speed = 5.5 * speedMult;
+      return 1;
+    } else if (difficulty === 'hard' && Math.hypot(dx, dy) < 80) {
+      return -1;
+    }
+
+    return 0;
+  }
+
+  draw() {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.angle);
+
+    const w = this.width;
+    const h = this.height;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    ctx.beginPath();
+    ctx.roundRect(-w / 2 + 3, -h / 2 + 5, w, h, 8);
+    ctx.fill();
+
+    ctx.fillStyle = '#111827';
+    ctx.fillRect(w / 4 - 5, -h / 2 - 3, 10, 5);
+    ctx.fillRect(-w / 4 - 5, -h / 2 - 3, 10, 5);
+    ctx.fillRect(w / 4 - 5, h / 2 - 2, 10, 5);
+    ctx.fillRect(-w / 4 - 5, h / 2 - 2, 10, 5);
+
+    const bodyGrad = ctx.createLinearGradient(0, -h/2, 0, h/2);
+    if (!this.isP2) {
+      bodyGrad.addColorStop(0, '#38bdf8');
+      bodyGrad.addColorStop(0.5, '#0284c7');
+      bodyGrad.addColorStop(1, '#0369a1');
+    } else {
+      bodyGrad.addColorStop(0, '#fb7185');
+      bodyGrad.addColorStop(0.5, '#e11d48');
+      bodyGrad.addColorStop(1, '#9f1239');
+    }
+
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath();
+    ctx.roundRect(-w / 2, -h / 2, w, h, 8);
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.fillRect(-w / 2, -2, w - 4, 4);
+
+    ctx.fillStyle = '#1e293b';
+    ctx.beginPath();
+    ctx.roundRect(-w / 6, -h / 2 + 4, w / 2.8, h - 8, 4);
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.beginPath();
+    ctx.moveTo(-w / 6 + 2, -h / 2 + 6);
+    ctx.lineTo(0, -h / 2 + 6);
+    ctx.lineTo(-w / 6 + 2, h / 2 - 6);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffed';
+    ctx.shadowColor = '#ffffaa';
+    ctx.shadowBlur = 8;
+    ctx.fillRect(w / 2 - 3, -h / 2 + 3, 4, 6);
+    ctx.fillRect(w / 2 - 3, h / 2 - 9, 4, 6);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(-w / 2 - 3, -h / 2 + 2, 5, h - 4);
+
+    ctx.restore();
+  }
+}
+
+class Ball {
+  constructor() {
+    this.x = canvas.width / 2;
+    this.y = canvas.height / 2;
+    this.vx = 0;
+    this.vy = 0;
+    this.radius = 20;
+    this.friction = 0.982;
+  }
+
+  reset() {
+    this.x = canvas.width / 2;
+    this.y = canvas.height / 2;
+    this.vx = 0;
+    this.vy = 0;
+  }
+
+  update() {
+    if (gameState !== 'PLAYING') return;
+
+    this.vx *= this.friction;
+    this.vy *= this.friction;
+
+    this.x += this.vx;
+    this.y += this.vy;
+
+    const goalTop = 180;
+    const goalBottom = 420;
+
+    if (this.y - this.radius < 20) {
+      this.y = 20 + this.radius;
+      this.vy *= -0.85;
+    }
+    if (this.y + this.radius > canvas.height - 20) {
+      this.y = canvas.height - 20 - this.radius;
+      this.vy *= -0.85;
+    }
+
+    if (this.x - this.radius < 20) {
+      if (this.y < goalTop || this.y > goalBottom) {
+        this.x = 20 + this.radius;
+        this.vx *= -0.85;
+      }
+    }
+
+    if (this.x + this.radius > canvas.width - 20) {
+      if (this.y < goalTop || this.y > goalBottom) {
+        this.x = canvas.width - 20 - this.radius;
+        this.vx *= -0.85;
+      }
+    }
+
+    if (this.x < -this.radius) {
+      score2++;
+      document.getElementById('s2').innerText = score2;
+      triggerGoal(canvas.width, canvas.height/2, '#f43f5e');
+    } else if (this.x > canvas.width + this.radius) {
+      score1++;
+      document.getElementById('s1').innerText = score1;
+      triggerGoal(0, canvas.height/2, '#38bdf8');
+    }
+  }
+
+  draw() {
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.beginPath();
+    ctx.arc(this.x + 4, this.y + 6, this.radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    const grad = ctx.createRadialGradient(
+      this.x - this.radius * 0.3,
+      this.y - this.radius * 0.3,
+      2,
+      this.x,
+      this.y,
+      this.radius
+    );
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(0.7, '#e2e8f0');
+    grad.addColorStop(1, '#64748b');
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius * 0.5, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+}
+
+function createGoalExplosion(x, y, color) {
+  for (let i = 0; i < 60; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 3 + Math.random() * 8;
+    particles.push(new Particle(
+      x, y,
+      Math.cos(angle) * speed,
+      Math.sin(angle) * speed,
+      color,
+      6 + Math.random() * 6,
+      40
+    ));
+  }
+}
+
+const p1 = new Car(160, canvas.height / 2, '#38bdf8');
+const p2 = new Car(canvas.width - 160, canvas.height / 2, '#f43f5e', true);
+const ball = new Ball();
+
+function handleCarBallCollision(car, ball) {
+  if (gameState !== 'PLAYING') return;
+
+  const dx = ball.x - car.x;
+  const dy = ball.y - car.y;
+  const dist = Math.hypot(dx, dy);
+
+  if (dist < car.radius + ball.radius) {
+    const angle = Math.atan2(dy, dx);
+
+    ball.x = car.x + Math.cos(angle) * (car.radius + ball.radius);
+    ball.y = car.y + Math.sin(angle) * (car.radius + ball.radius);
+
+    const hitSpeed = Math.hypot(car.vx, car.vy);
+    const impulse = hitSpeed > 0 ? hitSpeed * 1.6 : 3.5;
+
+    ball.vx = Math.cos(angle) * impulse;
+    ball.vy = Math.sin(angle) * impulse;
+
+    for (let i = 0; i < 8; i++) {
+      particles.push(new Particle(
+        (car.x + ball.x) / 2,
+        (car.y + ball.y) / 2,
+        (Math.random() - 0.5) * 4,
+        (Math.random() - 0.5) * 4,
+        '#fef08a',
+        3,
+        10
+      ));
+    }
+  }
+}
+
+function handleCarCarCollision(c1, c2) {
+  if (gameState !== 'PLAYING') return;
+
+  const dx = c2.x - c1.x;
+  const dy = c2.y - c1.y;
+  const dist = Math.hypot(dx, dy);
+
+  if (dist < c1.radius + c2.radius) {
+    const angle = Math.atan2(dy, dx);
+    const overlap = (c1.radius + c2.radius) - dist;
+
+    c1.x -= Math.cos(angle) * (overlap / 2);
+    c1.y -= Math.sin(angle) * (overlap / 2);
+    c2.x += Math.cos(angle) * (overlap / 2);
+    c2.y += Math.sin(angle) * (overlap / 2);
+  }
+}
+
+function startCountdown() {
+  gameState = 'COUNTDOWN';
+  countdownVal = 3;
+  countdownText.innerText = '3';
+  countdownText.style.display = 'block';
+  replayBanner.style.display = 'none';
+
+  if (countdownTimer) clearInterval(countdownTimer);
+
+  countdownTimer = setInterval(() => {
+    countdownVal--;
+    if (countdownVal > 0) {
+      countdownText.innerText = countdownVal;
+    } else if (countdownVal === 0) {
+      countdownText.innerText = 'GO!';
+    } else {
+      clearInterval(countdownTimer);
+      countdownText.style.display = 'none';
+      gameState = 'PLAYING';
+    }
+  }, 800);
+}
+
+function triggerGoal(x, y, color) {
+  createGoalExplosion(x, y, color);
+  gameState = 'REPLAY';
+  replayIndex = 0;
+  replayBanner.style.display = 'block';
+}
+
+function resetGame() {
+  p1.reset();
+  p2.reset();
+  ball.reset();
+  particles = [];
+  historyBuffer = [];
+  startCountdown();
+}
+
+function drawStadium() {
+  const stripeHeight = 60;
+  for (let y = 20; y < canvas.height - 20; y += stripeHeight) {
+    ctx.fillStyle = (Math.floor(y / stripeHeight) % 2 === 0) ? '#0a3821' : '#0c4227';
+    ctx.fillRect(20, y, canvas.width - 40, Math.min(stripeHeight, canvas.height - 20 - y));
+  }
+
+  ctx.strokeStyle = '#334155';
+  ctx.lineWidth = 10;
+  ctx.strokeRect(15, 15, canvas.width - 30, canvas.height - 30);
+
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+  ctx.lineWidth = 4;
+
+  ctx.beginPath();
+  ctx.moveTo(canvas.width / 2, 20);
+  ctx.lineTo(canvas.width / 2, canvas.height - 20);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(canvas.width / 2, canvas.height / 2, 90, 0, Math.PI * 2);
+  ctx.stroke();
+
+  const goalTop = 180;
+  const goalHeight = 240;
+
+  ctx.fillStyle = 'rgba(56, 189, 248, 0.15)';
+  ctx.fillRect(0, goalTop, 20, goalHeight);
+  ctx.strokeStyle = '#38bdf8';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(0, goalTop, 20, goalHeight);
+
+  ctx.fillStyle = 'rgba(244, 63, 94, 0.15)';
+  ctx.fillRect(canvas.width - 20, goalTop, 20, goalHeight);
+  ctx.strokeStyle = '#f43f5e';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(canvas.width - 20, goalTop, 20, goalHeight);
+}
+
+function recordFrame() {
+  if (gameState === 'PLAYING') {
+    historyBuffer.push({
+      p1: { x: p1.x, y: p1.y, angle: p1.angle },
+      p2: { x: p2.x, y: p2.y, angle: p2.angle },
+      ball: { x: ball.x, y: ball.y }
+    });
+    if (historyBuffer.length > REPLAY_FRAMES) {
+      historyBuffer.shift();
+    }
+  }
+}
+
+let replayFrameToggle = false;
+
+function loop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  drawStadium();
+
+  if (gameState === 'PLAYING' || gameState === 'COUNTDOWN') {
+    p1.update();
+    p2.update();
+    ball.update();
+
+    handleCarBallCollision(p1, ball);
+    handleCarBallCollision(p2, ball);
+    handleCarCarCollision(p1, p2);
+
+    recordFrame();
+
+    particles = particles.filter(p => p.life > 0);
+    particles.forEach(p => {
+      p.update();
+      p.draw();
+    });
+
+    p1.draw();
+    p2.draw();
+    ball.draw();
+  } else if (gameState === 'REPLAY') {
+    // Reproducir historia a 0.5x velocidad (avanza frame por medio)
+    replayFrameToggle = !replayFrameToggle;
+    if (replayFrameToggle) {
+      replayIndex++;
+    }
+
+    if (replayIndex < historyBuffer.length) {
+      const snap = historyBuffer[replayIndex];
+      
+      // Aplicar posiciones guardadas
+      p1.x = snap.p1.x; p1.y = snap.p1.y; p1.angle = snap.p1.angle;
+      p2.x = snap.p2.x; p2.y = snap.p2.y; p2.angle = snap.p2.angle;
+      ball.x = snap.ball.x; ball.y = snap.ball.y;
+
+      p1.draw();
+      p2.draw();
+      ball.draw();
+    } else {
+      // Fin de la repetición
+      resetGame();
+    }
+  }
+
+  requestAnimationFrame(loop);
+}
+
+startCountdown();
+loop();
+</script>
+</body>
+</html>
